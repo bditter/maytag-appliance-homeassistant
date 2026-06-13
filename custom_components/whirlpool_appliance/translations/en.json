@@ -1,0 +1,46 @@
+{
+  "title": "Whirlpool Appliance",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect your Whirlpool appliance account",
+        "description": "Enter the account used by the Maytag app. Appliance IDs may be separated by commas or entered one per line.",
+        "data": {
+          "username": "Email",
+          "password": "Password",
+          "dryer_saids": "Dryer appliance IDs",
+          "washer_saids": "Washer appliance IDs"
+        }
+      },
+      "reconfigure": {
+        "title": "Update Whirlpool appliance settings",
+        "description": "Update the account or appliance IDs. Leave the password blank to keep the currently saved password. Appliance IDs may be separated by commas or entered one per line.",
+        "data": {
+          "username": "Email",
+          "password": "Password",
+          "dryer_saids": "Dryer appliance IDs",
+          "washer_saids": "Washer appliance IDs"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect your Whirlpool appliance account",
+        "description": "The Whirlpool cloud rejected the saved credentials. Enter the current password.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the Whirlpool cloud.",
+      "invalid_auth": "The email or password is incorrect.",
+      "invalid_appliance": "At least one appliance ID is required, or an appliance ID could not be found.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This account is already configured.",
+      "unique_id_mismatch": "The account email cannot be changed. Remove and add the integration again to use another account.",
+      "reauth_successful": "Reauthentication was successful.",
+      "reconfigure_successful": "The integration was updated."
+    }
+  }
+}
