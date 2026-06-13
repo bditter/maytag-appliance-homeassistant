@@ -1,12 +1,17 @@
-"""Status sensors for Whirlpool appliances."""
+"""Status sensors for Maytag appliances."""
 
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -20,7 +25,7 @@ from .const import (
     CONF_WASHER_SAIDS,
     DOMAIN,
 )
-from .coordinator import WhirlpoolDataCoordinator
+from .coordinator import MaytagDataCoordinator
 
 UNIT_STATES = {
     "0": "Ready",
@@ -78,6 +83,10 @@ SOIL_LEVELS = {
     "4": "Extra Light",
 }
 DRYNESS_LEVELS = {"1": "Less", "4": "Normal", "7": "More"}
+STATUS_NAMES = {
+    APPLIANCE_WASHER: "Washer Status",
+    APPLIANCE_DRYER: "Dryer Status",
+}
 
 
 def _attribute(data: dict[str, Any], key: str) -> Any:
@@ -90,10 +99,10 @@ def _mapped(value: Any, values: dict[str, str]) -> Any:
     return values.get(str(value), value)
 
 
-def _end_time(seconds: Any) -> datetime | None:
+def _end_time(seconds: Any, base_time: datetime | None = None) -> datetime | None:
     """Calculate the estimated local end time."""
     try:
-        return dt_util.now() + timedelta(seconds=int(seconds))
+        return (base_time or dt_util.now()) + timedelta(seconds=int(seconds))
     except (TypeError, ValueError):
         return None
 
@@ -103,30 +112,37 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up Whirlpool appliance sensors."""
-    coordinator: WhirlpoolDataCoordinator = entry.runtime_data
+    """Set up Maytag appliance sensors."""
+    coordinator: MaytagDataCoordinator = entry.runtime_data
     entities = [
-        WhirlpoolApplianceSensor(coordinator, said, APPLIANCE_DRYER)
+        MaytagApplianceSensor(coordinator, said, APPLIANCE_DRYER)
         for said in entry.data.get(CONF_DRYER_SAIDS, [])
     ]
+    for said in entry.data.get(CONF_DRYER_SAIDS, []):
+        entities.extend(
+            MaytagDetailSensor(coordinator, said, APPLIANCE_DRYER, description)
+            for description in DRYER_SENSOR_DESCRIPTIONS
+        )
     entities.extend(
-        WhirlpoolApplianceSensor(coordinator, said, APPLIANCE_WASHER)
+        MaytagApplianceSensor(coordinator, said, APPLIANCE_WASHER)
         for said in entry.data.get(CONF_WASHER_SAIDS, [])
     )
+    for said in entry.data.get(CONF_WASHER_SAIDS, []):
+        entities.extend(
+            MaytagDetailSensor(coordinator, said, APPLIANCE_WASHER, description)
+            for description in WASHER_SENSOR_DESCRIPTIONS
+        )
     async_add_entities(entities)
 
 
-class WhirlpoolApplianceSensor(
-    CoordinatorEntity[WhirlpoolDataCoordinator], SensorEntity
-):
-    """Represent the status of a Whirlpool washer or dryer."""
+class MaytagApplianceSensor(CoordinatorEntity[MaytagDataCoordinator], SensorEntity):
+    """Represent the status of a Maytag washer or dryer."""
 
-    _attr_has_entity_name = True
-    _attr_name = "Status"
+    _attr_has_entity_name = False
 
     def __init__(
         self,
-        coordinator: WhirlpoolDataCoordinator,
+        coordinator: MaytagDataCoordinator,
         said: str,
         appliance_type: str,
     ) -> None:
@@ -134,6 +150,7 @@ class WhirlpoolApplianceSensor(
         super().__init__(coordinator)
         self._said = said
         self._appliance_type = appliance_type
+        self._attr_name = STATUS_NAMES[appliance_type]
         self._attr_unique_id = f"{said}_{appliance_type}_status"
         self.entity_id = f"sensor.maytag_{appliance_type}_{said.lower()}"
 
@@ -222,7 +239,7 @@ class WhirlpoolApplianceSensor(
             "totalcycles": _attribute(data, "XCat_OdometerStatusCycleCount"),
             "remoteenabled": _attribute(data, "XCat_RemoteSetRemoteControlEnable"),
             "timeremaining": remaining,
-            "end_time": _end_time(remaining),
+            "end_time": _end_time(remaining, self.coordinator.last_update_time),
             "online": _attribute(data, "Online"),
         }
 
@@ -304,3 +321,138 @@ class WhirlpoolApplianceSensor(
             )
 
         return attributes
+
+
+WASHER_SENSOR_DESCRIPTIONS = (
+    SensorEntityDescription(
+        key="cycle_id",
+        name="Washer Cycle ID",
+        icon="mdi:numeric",
+    ),
+    SensorEntityDescription(
+        key="cycle_name",
+        name="Washer Cycle Name",
+        icon="mdi:washing-machine",
+    ),
+    SensorEntityDescription(
+        key="time_remaining",
+        name="Washer Time Remaining",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        icon="mdi:timer-outline",
+    ),
+    SensorEntityDescription(
+        key="end_time",
+        name="Washer End Time",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:clock-end",
+    ),
+)
+
+DRYER_SENSOR_DESCRIPTIONS = (
+    SensorEntityDescription(
+        key="cycle_id",
+        name="Dryer Cycle ID",
+        icon="mdi:numeric",
+    ),
+    SensorEntityDescription(
+        key="cycle_name",
+        name="Dryer Cycle Name",
+        icon="mdi:tumble-dryer",
+    ),
+    SensorEntityDescription(
+        key="temperature",
+        name="Dryer Temperature",
+        icon="mdi:thermometer",
+    ),
+    SensorEntityDescription(
+        key="time_remaining",
+        name="Dryer Time Remaining",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        icon="mdi:timer-outline",
+    ),
+    SensorEntityDescription(
+        key="end_time",
+        name="Dryer End Time",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:clock-end",
+    ),
+)
+
+
+class MaytagDetailSensor(CoordinatorEntity[MaytagDataCoordinator], SensorEntity):
+    """Represent one Maytag appliance detail as a dedicated sensor."""
+
+    _attr_has_entity_name = False
+
+    def __init__(
+        self,
+        coordinator: MaytagDataCoordinator,
+        said: str,
+        appliance_type: str,
+        description: SensorEntityDescription,
+    ) -> None:
+        """Initialize a Maytag detail sensor."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._said = said
+        self._appliance_type = appliance_type
+        self._attr_unique_id = f"{said}_{appliance_type}_{description.key}"
+        self.entity_id = (
+            f"sensor.maytag_{appliance_type}_{said.lower()}_{description.key}"
+        )
+
+    @property
+    def _data(self) -> dict[str, Any]:
+        """Return this appliance's latest data."""
+        return self.coordinator.data.get(self._said, {})
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device registry information."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._said)},
+            manufacturer="Maytag",
+            model=_attribute(self._data, "ModelNumber"),
+            serial_number=_attribute(self._data, "XCat_ApplianceInfoSetSerialNumber"),
+            name=f"Maytag {self._appliance_type.title()} {self._said[-4:]}",
+        )
+
+    @property
+    def native_value(self) -> Any:
+        """Return the requested detail value."""
+        key = self.entity_description.key
+        data = self._data
+
+        if key == "time_remaining":
+            value = _attribute(data, "Cavity_TimeStatusEstTimeRemaining")
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+        if key == "end_time":
+            return _end_time(
+                _attribute(data, "Cavity_TimeStatusEstTimeRemaining"),
+                self.coordinator.last_update_time,
+            )
+
+        if self._appliance_type == APPLIANCE_DRYER:
+            cycle_id = _attribute(data, "DryCavity_CycleSetCycleSelect")
+            if key == "cycle_id":
+                return cycle_id
+            if key == "cycle_name":
+                return _mapped(cycle_id, DRYER_CYCLES)
+            if key == "temperature":
+                return _mapped(
+                    _attribute(data, "DryCavity_CycleSetTemperature"),
+                    DRYER_TEMPERATURES,
+                )
+        else:
+            cycle_id = _attribute(data, "WashCavity_CycleSetCycleSelect")
+            if key == "cycle_id":
+                return cycle_id
+            if key == "cycle_name":
+                return _mapped(cycle_id, WASHER_CYCLES)
+
+        return None

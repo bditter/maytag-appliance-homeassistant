@@ -1,6 +1,8 @@
-"""Constants for the Whirlpool Appliance integration."""
+"""Constants for the Maytag Appliance integration."""
 
-DOMAIN = "whirlpool_appliance"
+from homeassistant.const import Platform
+
+DOMAIN = "maytag_appliance"
 
 CONF_DRYER_SAIDS = "dryer_saids"
 CONF_WASHER_SAIDS = "washer_saids"
@@ -8,7 +10,7 @@ CONF_WASHER_SAIDS = "washer_saids"
 APPLIANCE_DRYER = "dryer"
 APPLIANCE_WASHER = "washer"
 
-PLATFORMS = ["sensor"]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 API_BASE_URL = "https://api.whrcloud.com"
 API_CLIENT_ID = "maytag_android_v1"

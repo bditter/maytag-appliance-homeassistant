@@ -1,4 +1,4 @@
-"""Data coordinator for Whirlpool Appliance."""
+"""Data coordinator for Maytag Appliance."""
 
 from __future__ import annotations
 
@@ -11,26 +11,27 @@ from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import (
-    WhirlpoolApiClient,
-    WhirlpoolApiError,
-    WhirlpoolAuthenticationError,
-    WhirlpoolConnectionError,
+    MaytagApiClient,
+    MaytagApiError,
+    MaytagAuthenticationError,
+    MaytagConnectionError,
 )
 from .const import CONF_DRYER_SAIDS, CONF_WASHER_SAIDS, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class WhirlpoolDataCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
+class MaytagDataCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]]):
     """Coordinate account authentication and appliance polling."""
 
     def __init__(
         self,
         hass: HomeAssistant,
         entry: ConfigEntry,
-        client: WhirlpoolApiClient,
+        client: MaytagApiClient,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -42,6 +43,7 @@ class WhirlpoolDataCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]])
         )
         self.client = client
         self.update_count = 0
+        self.last_update_time = None
         self.appliance_ids = list(
             dict.fromkeys(
                 entry.data.get(CONF_DRYER_SAIDS, [])
@@ -54,10 +56,11 @@ class WhirlpoolDataCoordinator(DataUpdateCoordinator[dict[str, dict[str, Any]]])
         try:
             data = await self.client.async_get_appliances(self.appliance_ids)
             self.update_count += 1
+            self.last_update_time = dt_util.now()
             return data
-        except WhirlpoolAuthenticationError as err:
+        except MaytagAuthenticationError as err:
             raise ConfigEntryAuthFailed(
                 f"Authentication failed for {self.config_entry.data[CONF_USERNAME]}"
             ) from err
-        except (WhirlpoolConnectionError, WhirlpoolApiError) as err:
+        except (MaytagConnectionError, MaytagApiError) as err:
             raise UpdateFailed(str(err)) from err

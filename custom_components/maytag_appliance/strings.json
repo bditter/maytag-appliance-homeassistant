@@ -1,9 +1,9 @@
 {
-  "title": "Whirlpool Appliance",
+  "title": "Maytag Appliance",
   "config": {
     "step": {
       "user": {
-        "title": "Connect your Whirlpool appliance account",
+        "title": "Connect your Maytag appliance account",
         "description": "Enter the account used by the Maytag app. Appliance IDs may be separated by commas or entered one per line.",
         "data": {
           "username": "Email",
@@ -13,7 +13,7 @@
         }
       },
       "reconfigure": {
-        "title": "Update Whirlpool appliance settings",
+        "title": "Update Maytag appliance settings",
         "description": "Update the account or appliance IDs. Leave the password blank to keep the currently saved password. Appliance IDs may be separated by commas or entered one per line.",
         "data": {
           "username": "Email",
@@ -23,15 +23,15 @@
         }
       },
       "reauth_confirm": {
-        "title": "Reconnect your Whirlpool appliance account",
-        "description": "The Whirlpool cloud rejected the saved credentials. Enter the current password.",
+        "title": "Reconnect your Maytag appliance account",
+        "description": "The Maytag appliance service rejected the saved credentials. Enter the current password.",
         "data": {
           "password": "Password"
         }
       }
     },
     "error": {
-      "cannot_connect": "Unable to connect to the Whirlpool cloud.",
+      "cannot_connect": "Unable to connect to the Maytag appliance service.",
       "invalid_auth": "The email or password is incorrect.",
       "invalid_appliance": "At least one appliance ID is required, or an appliance ID could not be found.",
       "unknown": "An unexpected error occurred."

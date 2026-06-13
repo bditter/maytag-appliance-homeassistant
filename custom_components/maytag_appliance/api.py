@@ -15,19 +15,19 @@ from .const import (
 )
 
 
-class WhirlpoolApiError(Exception):
+class MaytagApiError(Exception):
     """Base Whirlpool API error."""
 
 
-class WhirlpoolAuthenticationError(WhirlpoolApiError):
+class MaytagAuthenticationError(MaytagApiError):
     """Whirlpool authentication failed."""
 
 
-class WhirlpoolConnectionError(WhirlpoolApiError):
+class MaytagConnectionError(MaytagApiError):
     """Whirlpool cloud could not be reached."""
 
 
-class WhirlpoolApiClient:
+class MaytagApiClient:
     """Client for the Whirlpool cloud API."""
 
     def __init__(self, session: ClientSession, username: str, password: str) -> None:
@@ -57,17 +57,17 @@ class WhirlpoolApiClient:
                 f"{API_BASE_URL}/oauth/token", data=data, headers=headers
             )
             if response.status in (400, 401, 403):
-                raise WhirlpoolAuthenticationError("Invalid username or password")
+                raise MaytagAuthenticationError("Invalid username or password")
             response.raise_for_status()
             payload = await response.json()
-        except WhirlpoolAuthenticationError:
+        except MaytagAuthenticationError:
             raise
         except (ClientResponseError, TimeoutError, OSError) as err:
-            raise WhirlpoolConnectionError("Unable to reach Whirlpool cloud") from err
+            raise MaytagConnectionError("Unable to reach Whirlpool cloud") from err
 
         token = payload.get("access_token")
         if not token:
-            raise WhirlpoolAuthenticationError(
+            raise MaytagAuthenticationError(
                 payload.get(
                     "error_description", "Authentication did not return a token"
                 )
@@ -88,15 +88,15 @@ class WhirlpoolApiClient:
                 f"{API_BASE_URL}/api/v1/appliance/{said}", headers=headers
             )
             if response.status in (401, 403):
-                raise WhirlpoolAuthenticationError("Whirlpool session expired")
+                raise MaytagAuthenticationError("Whirlpool session expired")
             if response.status == 404:
-                raise WhirlpoolApiError(f"Appliance ID {said} was not found")
+                raise MaytagApiError(f"Appliance ID {said} was not found")
             response.raise_for_status()
             return await response.json()
-        except (WhirlpoolAuthenticationError, WhirlpoolApiError):
+        except (MaytagAuthenticationError, MaytagApiError):
             raise
         except (ClientResponseError, TimeoutError, OSError) as err:
-            raise WhirlpoolConnectionError("Unable to read appliance data") from err
+            raise MaytagConnectionError("Unable to read appliance data") from err
 
     async def async_get_appliances(
         self, appliance_ids: list[str]

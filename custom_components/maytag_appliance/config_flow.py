@@ -1,4 +1,4 @@
-"""Config flow for Whirlpool Appliance."""
+"""Config flow for Maytag Appliance."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ from homeassistant.helpers.selector import (
 )
 
 from .api import (
-    WhirlpoolApiClient,
-    WhirlpoolApiError,
-    WhirlpoolAuthenticationError,
-    WhirlpoolConnectionError,
+    MaytagApiClient,
+    MaytagApiError,
+    MaytagAuthenticationError,
+    MaytagConnectionError,
 )
 from .const import CONF_DRYER_SAIDS, CONF_WASHER_SAIDS, DOMAIN
 
@@ -100,7 +100,7 @@ async def _validate_input(hass, user_input: dict[str, Any]) -> dict[str, Any]:
     if not appliance_ids:
         raise ValueError("At least one appliance ID is required")
 
-    client = WhirlpoolApiClient(
+    client = MaytagApiClient(
         async_get_clientsession(hass),
         data[CONF_USERNAME],
         data[CONF_PASSWORD],
@@ -110,8 +110,8 @@ async def _validate_input(hass, user_input: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
-class WhirlpoolApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Whirlpool Appliance."""
+class MaytagApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Maytag Appliance."""
 
     VERSION = 1
 
@@ -123,11 +123,11 @@ class WhirlpoolApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 data = await _validate_input(self.hass, user_input)
-            except WhirlpoolAuthenticationError:
+            except MaytagAuthenticationError:
                 errors["base"] = "invalid_auth"
-            except WhirlpoolConnectionError:
+            except MaytagConnectionError:
                 errors["base"] = "cannot_connect"
-            except (WhirlpoolApiError, ValueError):
+            except (MaytagApiError, ValueError):
                 errors["base"] = "invalid_appliance"
             except Exception:  # noqa: BLE001
                 errors["base"] = "unknown"
@@ -153,11 +153,11 @@ class WhirlpoolApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input[CONF_PASSWORD] = entry.data[CONF_PASSWORD]
             try:
                 data = await _validate_input(self.hass, user_input)
-            except WhirlpoolAuthenticationError:
+            except MaytagAuthenticationError:
                 errors["base"] = "invalid_auth"
-            except WhirlpoolConnectionError:
+            except MaytagConnectionError:
                 errors["base"] = "cannot_connect"
-            except (WhirlpoolApiError, ValueError):
+            except (MaytagApiError, ValueError):
                 errors["base"] = "invalid_appliance"
             except Exception:  # noqa: BLE001
                 errors["base"] = "unknown"
@@ -191,11 +191,11 @@ class WhirlpoolApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data = {**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]}
             try:
                 await _validate_input(self.hass, data)
-            except WhirlpoolAuthenticationError:
+            except MaytagAuthenticationError:
                 errors["base"] = "invalid_auth"
-            except WhirlpoolConnectionError:
+            except MaytagConnectionError:
                 errors["base"] = "cannot_connect"
-            except (WhirlpoolApiError, ValueError):
+            except (MaytagApiError, ValueError):
                 errors["base"] = "invalid_appliance"
             else:
                 return self.async_update_reload_and_abort(
