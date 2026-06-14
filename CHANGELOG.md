@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1 - 2026-06-14
+
+- Refresh an expired Whirlpool access token automatically and retry appliance
+  requests once.
+- Only request Home Assistant reauthentication when the saved account
+  credentials actually fail.
+
 ## 1.1.0 - 2026-06-13
 
 - Rename the integration and domain to Maytag Appliance.

@@ -27,6 +27,10 @@ class MaytagConnectionError(MaytagApiError):
     """Whirlpool cloud could not be reached."""
 
 
+class MaytagSessionExpiredError(MaytagApiError):
+    """Whirlpool access token has expired."""
+
+
 class MaytagApiClient:
     """Client for the Whirlpool cloud API."""
 
@@ -39,6 +43,7 @@ class MaytagApiClient:
 
     async def async_authenticate(self) -> None:
         """Authenticate and retain an access token."""
+        self._access_token = None
         headers = {
             **API_HEADERS,
             "no_auth": "true",
@@ -76,9 +81,11 @@ class MaytagApiClient:
 
     async def async_get_appliance(self, said: str) -> dict[str, Any]:
         """Return data for one appliance."""
-        if self._access_token is None:
-            await self.async_authenticate()
+        appliances = await self.async_get_appliances([said])
+        return appliances[said]
 
+    async def _async_get_appliance_with_token(self, said: str) -> dict[str, Any]:
+        """Return one appliance using the current access token."""
         headers = {
             **API_HEADERS,
             "Authorization": f"bearer {self._access_token}",
@@ -88,12 +95,12 @@ class MaytagApiClient:
                 f"{API_BASE_URL}/api/v1/appliance/{said}", headers=headers
             )
             if response.status in (401, 403):
-                raise MaytagAuthenticationError("Whirlpool session expired")
+                raise MaytagSessionExpiredError("Whirlpool session expired")
             if response.status == 404:
                 raise MaytagApiError(f"Appliance ID {said} was not found")
             response.raise_for_status()
             return await response.json()
-        except (MaytagAuthenticationError, MaytagApiError):
+        except MaytagApiError:
             raise
         except (ClientResponseError, TimeoutError, OSError) as err:
             raise MaytagConnectionError("Unable to read appliance data") from err
@@ -104,7 +111,24 @@ class MaytagApiClient:
         """Return data for all configured appliances."""
         if self._access_token is None:
             await self.async_authenticate()
-        results = await asyncio.gather(
-            *(self.async_get_appliance(said) for said in appliance_ids)
-        )
+
+        try:
+            results = await self._async_get_appliances_with_token(appliance_ids)
+        except MaytagSessionExpiredError:
+            await self.async_authenticate()
+            try:
+                results = await self._async_get_appliances_with_token(appliance_ids)
+            except MaytagSessionExpiredError as err:
+                raise MaytagApiError(
+                    "Whirlpool cloud rejected the refreshed session"
+                ) from err
+
         return dict(zip(appliance_ids, results, strict=True))
+
+    async def _async_get_appliances_with_token(
+        self, appliance_ids: list[str]
+    ) -> list[dict[str, Any]]:
+        """Fetch all appliances using the current access token."""
+        return await asyncio.gather(
+            *(self._async_get_appliance_with_token(said) for said in appliance_ids)
+        )
