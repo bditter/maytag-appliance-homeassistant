@@ -4,22 +4,18 @@
     "step": {
       "user": {
         "title": "Connect your Maytag appliance account",
-        "description": "Enter the account used by the Maytag app. Appliance IDs may be separated by commas or entered one per line.",
+        "description": "Enter the account used by the Maytag app. Washers and dryers will be discovered automatically.",
         "data": {
           "username": "Email",
-          "password": "Password",
-          "dryer_saids": "Dryer appliance IDs",
-          "washer_saids": "Washer appliance IDs"
+          "password": "Password"
         }
       },
       "reconfigure": {
         "title": "Update Maytag appliance settings",
-        "description": "Update the account or appliance IDs. Leave the password blank to keep the currently saved password. Appliance IDs may be separated by commas or entered one per line.",
+        "description": "Update the account. Leave the password blank to keep the currently saved password. Washers and dryers are discovered automatically.",
         "data": {
           "username": "Email",
-          "password": "Password",
-          "dryer_saids": "Dryer appliance IDs",
-          "washer_saids": "Washer appliance IDs"
+          "password": "Password"
         }
       },
       "reauth_confirm": {
@@ -32,8 +28,9 @@
     },
     "error": {
       "cannot_connect": "Unable to connect to the Maytag appliance service.",
+      "account_locked": "The Maytag account is locked.",
       "invalid_auth": "The email or password is incorrect.",
-      "invalid_appliance": "At least one appliance ID is required, or an appliance ID could not be found.",
+      "no_appliances": "No supported Maytag washer or dryer was found on this account.",
       "unknown": "An unexpected error occurred."
     },
     "abort": {

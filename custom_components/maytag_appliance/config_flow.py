@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from aiohttp import ClientError
 import voluptuous as vol
+from whirlpool.appliancesmanager import AppliancesManager
+from whirlpool.auth import AccountLockedError, Auth
+from whirlpool.backendselector import BackendSelector, Brand, Region
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
@@ -16,32 +21,9 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .api import (
-    MaytagApiClient,
-    MaytagApiError,
-    MaytagAuthenticationError,
-    MaytagConnectionError,
-)
-from .const import CONF_DRYER_SAIDS, CONF_WASHER_SAIDS, DOMAIN
+from .const import DOMAIN
 
-
-def _parse_appliance_ids(value: str | list[str]) -> list[str]:
-    """Parse appliance IDs from a comma- or line-separated value."""
-    if isinstance(value, list):
-        return value
-    normalized = value.replace(",", "\n")
-    return list(
-        dict.fromkeys(
-            item.strip().upper() for item in normalized.splitlines() if item.strip()
-        )
-    )
-
-
-def _display_appliance_ids(value: list[str] | str) -> str:
-    """Format stored appliance IDs for the form."""
-    if isinstance(value, str):
-        return value
-    return "\n".join(value)
+_LOGGER = logging.getLogger(__name__)
 
 
 def _user_schema() -> vol.Schema:
@@ -54,66 +36,61 @@ def _user_schema() -> vol.Schema:
             vol.Required(CONF_PASSWORD): TextSelector(
                 TextSelectorConfig(type=TextSelectorType.PASSWORD)
             ),
-            vol.Optional(CONF_DRYER_SAIDS): TextSelector(
-                TextSelectorConfig(multiline=True)
-            ),
-            vol.Optional(CONF_WASHER_SAIDS): TextSelector(
-                TextSelectorConfig(multiline=True)
-            ),
         }
     )
 
 
-def _reconfigure_schema(defaults: dict[str, Any]) -> vol.Schema:
+def _reconfigure_schema(username: str) -> vol.Schema:
     """Build the reconfigure schema without displaying the saved password."""
     return vol.Schema(
         {
-            vol.Required(CONF_USERNAME, default=defaults[CONF_USERNAME]): TextSelector(
+            vol.Required(CONF_USERNAME, default=username): TextSelector(
                 TextSelectorConfig(type=TextSelectorType.EMAIL)
             ),
             vol.Optional(CONF_PASSWORD): TextSelector(
                 TextSelectorConfig(type=TextSelectorType.PASSWORD)
             ),
-            vol.Optional(
-                CONF_DRYER_SAIDS,
-                default=_display_appliance_ids(defaults.get(CONF_DRYER_SAIDS, [])),
-            ): TextSelector(TextSelectorConfig(multiline=True)),
-            vol.Optional(
-                CONF_WASHER_SAIDS,
-                default=_display_appliance_ids(defaults.get(CONF_WASHER_SAIDS, [])),
-            ): TextSelector(TextSelectorConfig(multiline=True)),
         }
     )
 
 
-async def _validate_input(hass, user_input: dict[str, Any]) -> dict[str, Any]:
-    """Validate credentials and appliance IDs, returning normalized data."""
+async def _validate_input(hass, user_input: dict[str, Any]) -> dict[str, str]:
+    """Validate credentials and confirm a washer or dryer is available."""
     data = {
         CONF_USERNAME: user_input[CONF_USERNAME].strip().lower(),
         CONF_PASSWORD: user_input[CONF_PASSWORD],
-        CONF_DRYER_SAIDS: _parse_appliance_ids(user_input.get(CONF_DRYER_SAIDS, "")),
-        CONF_WASHER_SAIDS: _parse_appliance_ids(user_input.get(CONF_WASHER_SAIDS, "")),
     }
-    appliance_ids = list(
-        dict.fromkeys(data[CONF_DRYER_SAIDS] + data[CONF_WASHER_SAIDS])
-    )
-    if not appliance_ids:
-        raise ValueError("At least one appliance ID is required")
-
-    client = MaytagApiClient(
-        async_get_clientsession(hass),
+    backend = BackendSelector(Brand.Maytag, Region.US)
+    auth = Auth(
+        backend,
         data[CONF_USERNAME],
         data[CONF_PASSWORD],
+        async_get_clientsession(hass),
     )
-    await client.async_authenticate()
-    await client.async_get_appliances(appliance_ids)
+    await auth.do_auth(store=False)
+    if not auth.is_access_token_valid():
+        raise InvalidCredentialsError
+
+    manager = AppliancesManager(backend, auth, async_get_clientsession(hass))
+    if not await manager.fetch_appliances() or (
+        not manager.washers and not manager.dryers
+    ):
+        raise NoAppliancesError
     return data
+
+
+class InvalidCredentialsError(Exception):
+    """The Maytag credentials were rejected."""
+
+
+class NoAppliancesError(Exception):
+    """The account has no supported washer or dryer."""
 
 
 class MaytagApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Maytag Appliance."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -123,13 +100,16 @@ class MaytagApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 data = await _validate_input(self.hass, user_input)
-            except MaytagAuthenticationError:
+            except InvalidCredentialsError:
                 errors["base"] = "invalid_auth"
-            except MaytagConnectionError:
+            except AccountLockedError:
+                errors["base"] = "account_locked"
+            except NoAppliancesError:
+                errors["base"] = "no_appliances"
+            except (ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
-            except (MaytagApiError, ValueError):
-                errors["base"] = "invalid_appliance"
             except Exception:  # noqa: BLE001
+                _LOGGER.exception("Unexpected error during Maytag setup")
                 errors["base"] = "unknown"
             else:
                 await self.async_set_unique_id(data[CONF_USERNAME])
@@ -145,7 +125,7 @@ class MaytagApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Allow account credentials and appliance IDs to be changed."""
+        """Allow account credentials to be changed."""
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -153,13 +133,16 @@ class MaytagApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 user_input[CONF_PASSWORD] = entry.data[CONF_PASSWORD]
             try:
                 data = await _validate_input(self.hass, user_input)
-            except MaytagAuthenticationError:
+            except InvalidCredentialsError:
                 errors["base"] = "invalid_auth"
-            except MaytagConnectionError:
+            except AccountLockedError:
+                errors["base"] = "account_locked"
+            except NoAppliancesError:
+                errors["base"] = "no_appliances"
+            except (ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
-            except (MaytagApiError, ValueError):
-                errors["base"] = "invalid_appliance"
             except Exception:  # noqa: BLE001
+                _LOGGER.exception("Unexpected error during Maytag reconfiguration")
                 errors["base"] = "unknown"
             else:
                 await self.async_set_unique_id(data[CONF_USERNAME])
@@ -172,7 +155,7 @@ class MaytagApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=_reconfigure_schema(user_input or dict(entry.data)),
+            data_schema=_reconfigure_schema((user_input or entry.data)[CONF_USERNAME]),
             errors=errors,
         )
 
@@ -186,22 +169,20 @@ class MaytagApplianceConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Request a replacement password after authentication failure."""
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
-
         if user_input is not None:
             data = {**entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]}
             try:
-                await _validate_input(self.hass, data)
-            except MaytagAuthenticationError:
+                validated = await _validate_input(self.hass, data)
+            except InvalidCredentialsError:
                 errors["base"] = "invalid_auth"
-            except MaytagConnectionError:
+            except AccountLockedError:
+                errors["base"] = "account_locked"
+            except NoAppliancesError:
+                errors["base"] = "no_appliances"
+            except (ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
-            except (MaytagApiError, ValueError):
-                errors["base"] = "invalid_appliance"
             else:
-                return self.async_update_reload_and_abort(
-                    entry,
-                    data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]},
-                )
+                return self.async_update_reload_and_abort(entry, data=validated)
 
         return self.async_show_form(
             step_id="reauth_confirm",

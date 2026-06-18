@@ -21,8 +21,6 @@ from homeassistant.util import dt as dt_util
 from .const import (
     APPLIANCE_DRYER,
     APPLIANCE_WASHER,
-    CONF_DRYER_SAIDS,
-    CONF_WASHER_SAIDS,
     DOMAIN,
 )
 from .coordinator import MaytagDataCoordinator
@@ -116,18 +114,18 @@ async def async_setup_entry(
     coordinator: MaytagDataCoordinator = entry.runtime_data
     entities = [
         MaytagApplianceSensor(coordinator, said, APPLIANCE_DRYER)
-        for said in entry.data.get(CONF_DRYER_SAIDS, [])
+        for said in coordinator.dryer_ids
     ]
-    for said in entry.data.get(CONF_DRYER_SAIDS, []):
+    for said in coordinator.dryer_ids:
         entities.extend(
             MaytagDetailSensor(coordinator, said, APPLIANCE_DRYER, description)
             for description in DRYER_SENSOR_DESCRIPTIONS
         )
     entities.extend(
         MaytagApplianceSensor(coordinator, said, APPLIANCE_WASHER)
-        for said in entry.data.get(CONF_WASHER_SAIDS, [])
+        for said in coordinator.washer_ids
     )
-    for said in entry.data.get(CONF_WASHER_SAIDS, []):
+    for said in coordinator.washer_ids:
         entities.extend(
             MaytagDetailSensor(coordinator, said, APPLIANCE_WASHER, description)
             for description in WASHER_SENSOR_DESCRIPTIONS
@@ -239,7 +237,9 @@ class MaytagApplianceSensor(CoordinatorEntity[MaytagDataCoordinator], SensorEnti
             "totalcycles": _attribute(data, "XCat_OdometerStatusCycleCount"),
             "remoteenabled": _attribute(data, "XCat_RemoteSetRemoteControlEnable"),
             "timeremaining": remaining,
-            "end_time": _end_time(remaining, self.coordinator.last_update_time),
+            "end_time": _end_time(
+                remaining, self.coordinator.last_update_times[self._said]
+            ),
             "online": _attribute(data, "Online"),
         }
 
@@ -399,6 +399,7 @@ class MaytagDetailSensor(CoordinatorEntity[MaytagDataCoordinator], SensorEntity)
         self._said = said
         self._appliance_type = appliance_type
         self._attr_unique_id = f"{said}_{appliance_type}_{description.key}"
+        self._end_time_value: datetime | None = None
         self.entity_id = (
             f"sensor.maytag_{appliance_type}_{said.lower()}_{description.key}"
         )
@@ -432,10 +433,16 @@ class MaytagDetailSensor(CoordinatorEntity[MaytagDataCoordinator], SensorEntity)
             except (TypeError, ValueError):
                 return None
         if key == "end_time":
-            return _end_time(
+            candidate = _end_time(
                 _attribute(data, "Cavity_TimeStatusEstTimeRemaining"),
-                self.coordinator.last_update_time,
+                self.coordinator.last_update_times[self._said],
             )
+            if candidate is not None and (
+                self._end_time_value is None
+                or abs(candidate - self._end_time_value) > timedelta(seconds=60)
+            ):
+                self._end_time_value = candidate
+            return self._end_time_value
 
         if self._appliance_type == APPLIANCE_DRYER:
             cycle_id = _attribute(data, "DryCavity_CycleSetCycleSelect")

@@ -16,8 +16,6 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .const import (
     APPLIANCE_DRYER,
     APPLIANCE_WASHER,
-    CONF_DRYER_SAIDS,
-    CONF_WASHER_SAIDS,
 )
 from .coordinator import MaytagDataCoordinator
 from .entity import MaytagCoordinatorEntity, appliance_attribute, attribute_is_on
@@ -100,12 +98,12 @@ async def async_setup_entry(
     """Set up Maytag appliance binary sensors."""
     coordinator: MaytagDataCoordinator = entry.runtime_data
     entities: list[MaytagBinarySensor] = []
-    for said in entry.data.get(CONF_WASHER_SAIDS, []):
+    for said in coordinator.washer_ids:
         entities.extend(
             MaytagBinarySensor(coordinator, said, APPLIANCE_WASHER, description)
             for description in WASHER_BINARY_SENSOR_DESCRIPTIONS
         )
-    for said in entry.data.get(CONF_DRYER_SAIDS, []):
+    for said in coordinator.dryer_ids:
         entities.extend(
             MaytagBinarySensor(coordinator, said, APPLIANCE_DRYER, description)
             for description in DRYER_BINARY_SENSOR_DESCRIPTIONS

@@ -22,12 +22,12 @@ not require YAML configuration.
 ## Features
 
 - GUI setup through **Settings > Devices & services**.
-- Washer and dryer appliance IDs.
-- Editable password and appliance IDs through **Reconfigure**.
+- Automatic discovery of Maytag washers and dryers on the account.
+- Editable account password through **Reconfigure**.
 - Existing Maytag entity IDs and state attributes retained for compatibility.
 - Dedicated entities for appliance status, connectivity, doors, cycles, and
   remaining time.
-- Two-minute cloud polling.
+- Near-real-time cloud push updates with a five-minute REST fallback refresh.
 - HACS custom repository support.
 
 ## Entities
@@ -61,6 +61,15 @@ not require YAML configuration.
 Online, remote-enabled, door, door-locked, need-clean, and alert values are
 binary sensors. Status, cycle, temperature, and time values are sensors.
 
+## Architecture
+
+This is a standalone custom integration and does not import Home Assistant's
+core Whirlpool integration. It directly pins the same maintained
+`whirlpool-sixth-sense` library version used by core for Maytag US
+authentication, discovery, REST fallback updates, and websocket events. Core
+integration changes therefore do not alter this integration's entities or
+configuration.
+
 ## Installation
 
 ### HACS
@@ -82,11 +91,22 @@ binary sensors. Status, cycle, temperature, and time values are sensors.
 1. Remove the old `maytag_dryer` sensor platform block from
    `configuration.yaml` if upgrading from the YAML integration.
 2. Open **Settings > Devices & services > Add integration**.
-3. Search for **Maytag Appliance** and enter the Maytag app account and
-   washer/dryer appliance IDs.
+3. Search for **Maytag Appliance** and enter the Maytag app account. Supported
+   washers and dryers are discovered automatically.
 
-To update a password or appliance ID later, open the integration and choose
-**Configure**, then **Reconfigure**.
+To update the password later, open the integration and choose **Configure**,
+then **Reconfigure**.
+
+## Upgrading From 1.1.x
+
+Version 1.2.0 automatically removes the previously saved appliance-ID lists
+and discovers washers and dryers from the Maytag account. Existing entities
+keep their SAID-based unique IDs, so removing the integration is normally not
+required.
+
+After updating, restart Home Assistant. If the integration still shows the old
+appliance-ID fields or does not discover the appliances, remove the integration
+entry and add **Maytag Appliance** again using only the email and password.
 
 ## Attribution
 

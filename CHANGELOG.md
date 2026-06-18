@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 - 2026-06-18
+
+- Discover Maytag washers and dryers automatically during GUI setup; appliance
+  IDs are no longer required.
+- Use the same pinned `whirlpool-sixth-sense` library as Home Assistant core
+  for Maytag US authentication, appliance discovery, and websocket events.
+- Update entities immediately from cloud-push callbacks.
+- Retain a five-minute REST refresh as a fallback if a push event is missed.
+- Migrate existing entries by removing their legacy washer/dryer ID lists.
+
 ## 1.1.1 - 2026-06-14
 
 - Refresh an expired Whirlpool access token automatically and retry appliance
