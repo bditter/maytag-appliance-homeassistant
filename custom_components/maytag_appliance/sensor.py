@@ -28,11 +28,44 @@ from .coordinator import MaytagDataCoordinator
 UNIT_STATES = {
     "0": "Ready",
     "1": "Setting",
+    "2": "Delay Countdown",
+    "3": "Delay Paused",
+    "4": "Smart Delay",
+    "5": "Smart Grid Paused",
     "6": "Paused",
     "7": "Running",
     "8": "Wrinkle Prevent",
+    "9": "Exception",
     "10": "Complete",
+    "11": "Power Failure",
+    "12": "Service Diagnostic",
+    "13": "Factory Diagnostic",
+    "14": "Life Test",
+    "15": "Customer Focus Mode",
+    "16": "Demo Mode",
+    "17": "Error",
+    "18": "Initializing",
+    "19": "Cancelled",
 }
+
+DRYER_RUNNING_PHASES = (
+    ("DryCavity_CycleStatusCoolDown", "Cool Down"),
+    ("DryCavity_CycleStatusSteaming", "Steaming"),
+    ("DryCavity_CycleStatusDrying", "Drying"),
+    ("DryCavity_CycleStatusDamp", "Damp"),
+    ("DryCavity_CycleStatusSensing", "Sensing"),
+)
+
+WASHER_RUNNING_PHASES = (
+    ("WashCavity_CycleStatusAddGarment", "Add Garmet"),
+    ("WashCavity_CycleStatusSensing", "Sensing"),
+    ("WashCavity_CycleStatusFilling", "Filling"),
+    ("WashCavity_CycleStatusSoaking", "Soaking"),
+    ("WashCavity_CycleStatusWashing", "Washing"),
+    ("WashCavity_CycleStatusRinsing", "Rinsing"),
+    ("WashCavity_CycleStatusDraining", "Draining"),
+    ("WashCavity_CycleStatusSpinning", "Spinning"),
+)
 
 DRYER_CYCLES = {
     "1": "Regular",
@@ -95,6 +128,25 @@ def _attribute(data: dict[str, Any], key: str) -> Any:
 def _mapped(value: Any, values: dict[str, str]) -> Any:
     """Map a cloud value to a display value."""
     return values.get(str(value), value)
+
+
+def _appliance_status(data: dict[str, Any], appliance_type: str) -> str:
+    """Return status using machine state as the authoritative value."""
+    machine_state = _attribute(data, "Cavity_CycleStatusMachineState")
+    machine_state_key = str(machine_state) if machine_state is not None else None
+
+    if machine_state_key != "7":
+        return UNIT_STATES.get(machine_state_key, machine_state) or "Unknown"
+
+    phases = (
+        DRYER_RUNNING_PHASES
+        if appliance_type == APPLIANCE_DRYER
+        else WASHER_RUNNING_PHASES
+    )
+    for key, label in phases:
+        if str(_attribute(data, key)).lower() in {"1", "true"}:
+            return label
+    return UNIT_STATES["7"]
 
 
 def _end_time(seconds: Any, base_time: datetime | None = None) -> datetime | None:
@@ -174,35 +226,7 @@ class MaytagApplianceSensor(CoordinatorEntity[MaytagDataCoordinator], SensorEnti
     @property
     def native_value(self) -> str:
         """Return the appliance's current status."""
-        data = self._data
-        state = _attribute(data, "Cavity_CycleStatusMachineState")
-        if _attribute(data, "Cavity_OpStatusDoorOpen") == "1":
-            return "Door Open"
-
-        if self._appliance_type == APPLIANCE_DRYER:
-            checks = (
-                ("DryCavity_CycleStatusSensing", "Sensing", {"1", "true"}),
-                ("DryCavity_CycleStatusDamp", "Damp", {"1", "true"}),
-                ("DryCavity_CycleStatusDrying", "Drying", {"1", "true"}),
-                ("DryCavity_CycleStatusSteaming", "Steaming", {"1", "true"}),
-                ("DryCavity_CycleStatusCoolDown", "Cool Down", {"1", "true"}),
-            )
-        else:
-            checks = (
-                ("WashCavity_CycleStatusAddGarment", "Add Garmet", {"1", "true"}),
-                ("WashCavity_CycleStatusSensing", "Sensing", {"1", "true"}),
-                ("WashCavity_CycleStatusFilling", "Filling", {"1", "true"}),
-                ("WashCavity_CycleStatusSoaking", "Soaking", {"1", "true"}),
-                ("WashCavity_CycleStatusWashing", "Washing", {"1", "true"}),
-                ("WashCavity_CycleStatusRinsing", "Rinsing", {"1", "true"}),
-                ("WashCavity_CycleStatusDraining", "Draining", {"1", "true"}),
-                ("WashCavity_CycleStatusSpinning", "Spinning", {"1", "true"}),
-            )
-
-        for key, label, active_values in checks:
-            if str(_attribute(data, key)).lower() in active_values:
-                return label
-        return _mapped(state, UNIT_STATES) or "Unknown"
+        return _appliance_status(self._data, self._appliance_type)
 
     @property
     def icon(self) -> str:

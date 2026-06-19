@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1 - 2026-06-18
+
+- Make the washer/dryer machine-state value authoritative for status.
+- Evaluate Sensing, Drying, and other phase flags only while machine state is
+  Running (`7`), preventing latched flags from overriding Ready or Setting.
+- Keep door open/closed exclusively in the dedicated binary sensor instead of
+  overriding the appliance status.
+- Prefer later dryer phases when multiple cloud flags are active.
+
 ## 1.2.0 - 2026-06-18
 
 - Discover Maytag washers and dryers automatically during GUI setup; appliance
